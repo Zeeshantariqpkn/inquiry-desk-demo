@@ -159,7 +159,7 @@ def sign_in(u, how="passcode"):
     st.rerun()
 
 
-if user:
+def render_user_card():
     with st.sidebar:
         r = ROLES[user["role"]]
         st.markdown(f"### 📨 Inquiry Desk")
@@ -203,9 +203,34 @@ def poll_mail(force=False):
     return n
 
 
+# ================= guide =================
+TIPS = {
+    "dashboard": "Start here. The numbers show how many emails came in, how many questions were inside them, and how many unique questions are left after grouping repeats.",
+    "vendor": "Act as a vendor. Write several questions in one message, word one question differently from the samples, or avoid obvious keywords. Keep the reference number.",
+    "inbox": "Click any row to open the original email. Each question is highlighted (Q1, Q2…) and the right side shows which group it joined and why.",
+    "review": "Only uncertain matches land here, so staff never read every email. Confirm, move, or make it its own question; the system learns from each decision.",
+    "questions": "Each card is one unique question with every vendor who asked it. Open one to see the original wording from each email, merge two questions, or undo a merge.",
+    "merge": "Pick a question to see every email merged into it, with each vendor's exact wording and reference ID. The least certain matches are listed first.",
+    "answers": "Drafts come only from published RFP documents and show their source. A Contracts Manager approves each answer, then publishes the addendum.",
+    "tracker": "Every email and the answers it maps to. A reply goes out only when all questions in that email are answered, so each vendor gets one complete reply.",
+    "access": "Who can do what, by role, and an audit log of every sign-in, decision and reply.",
+    "accuracy": "Accuracy measured on test questions the system never saw. Try your own question at the bottom to see how it would be matched.",
+    "settings": "RFP details, inquiry deadline and demo reset.",
+}
+GUIDE = [("vendor", "1 · Ask as a vendor"), ("inbox", "2 · Open your email"), ("review", "3 · Review uncertain"),
+         ("questions", "4 · See the originals"), ("merge", "5 · Merge report"), ("answers", "6 · Approve & publish"),
+         ("tracker", "7 · Send replies"), ("vendor", "8 · Read your reply"), ("access", "9 · Check the audit log")]
+
+
+def tip(key):
+    if st.session_state.get("show_guide", True) and key in TIPS:
+        st.info(f"**What to look for:** {TIPS[key]}", icon="💡")
+
+
 # ================= pages =================
 def page_dashboard():
     st.title("Dashboard")
+    tip("dashboard")
     em, gs = desk.emails(), desk.groups()
     nq = sum(g["n"] for g in gs)
     states = [desk.email_state(e)[0] for e in em]
@@ -235,6 +260,7 @@ def page_dashboard():
 
 def page_inbox():
     st.title("Inbox")
+    tip("inbox")
     top = st.columns([3, 1, 1])
     top[0].caption(f"Every email is saved with an ID, split into its questions and matched. {'Live inbox: ' + INBOX_ADDR if MAIL_ON else 'Live inbox not connected: use “Send a test email”.'}")
     if MAIL_ON and top[1].button("Check inbox now"):
@@ -317,6 +343,7 @@ def show_email(eid, focus=None):
 
 def page_questions():
     st.title("Questions")
+    tip("questions")
     gs = desk.groups()
     st.caption(f"{sum(g['n'] for g in gs)} questions from vendor emails, grouped into {len(gs)} unique questions. "
                "Grouping is by meaning: questions that one answer would fully answer belong together.")
@@ -364,6 +391,7 @@ def page_questions():
 
 def page_merge():
     st.title("Merge report")
+    tip("merge")
     st.caption("Every email merged into one question, with the vendor's exact wording and its reference email. Lowest match first, so staff check the least certain ones.")
     gs = sorted(desk.groups(), key=lambda g: -g["n"])
     if not gs:
@@ -394,6 +422,7 @@ def page_merge():
 
 def page_review():
     st.title("Needs review")
+    tip("review")
     rq = desk.review_queue()
     st.caption("Only uncertain items come here. Staff never need to open every email. Every decision teaches the system, so similar questions follow it next time.")
     if not rq:
@@ -419,6 +448,7 @@ def page_review():
 
 def page_answers():
     st.title("Answers & addendum")
+    tip("answers")
     gs = desk.groups()
     st.caption("Drafts come only from published RFP documents and always show their source. Questions with no source are left for staff. Nothing goes out until a manager approves it.")
     c = st.columns(4)
@@ -472,6 +502,7 @@ def page_answers():
 
 def page_tracker():
     st.title("Reply tracker")
+    tip("tracker")
     st.caption("Every email, each question inside it, the answer it maps to, and whether its reply has gone out. A reply is sent only when every question in that email has a published answer, so each vendor gets one reply covering all their questions.")
     em = desk.emails(); rows, ready = [], []
     for e in em:
@@ -510,6 +541,7 @@ def page_tracker():
 
 def page_access():
     st.title("Access & audit")
+    tip("access")
     st.caption("Who can sign in, what each role can do, and every action taken. Separation of duties: the person who drafts an answer is not the person who approves and sends it.")
     t1, t2, t3 = st.tabs(["People and roles", "Permissions by role", "Audit log"])
     with t1:
@@ -534,6 +566,7 @@ def page_access():
 
 def page_accuracy():
     st.title("Accuracy")
+    tip("accuracy")
     r = desk.report
     st.caption("Measured, not claimed. The thresholds were set on one half of the test questions; the numbers below come from the other half, which the calibration never saw. Many test questions avoid the obvious keyword on purpose.")
     st.markdown(f"**Engine:** {r['engine']} · **AI check:** {'on (' + llm.CFG['model'] + ')' if llm.enabled() else 'off'}")
@@ -599,6 +632,7 @@ def page_accuracy():
 
 def page_settings():
     st.title("Settings")
+    tip("settings")
     if not can("settings"):
         st.info("Read-only. Only an Administrator can change settings.")
         st.dataframe(pd.DataFrame([{"Setting": k, "Value": desk.s(k)} for k in ("rfp_no", "rfp_title", "deadline", "due", "live_on_time", "next_addendum")]), hide_index=True, use_container_width=True)
@@ -636,6 +670,8 @@ def _signin_with_code(u, code):
 
 
 def page_vendor():
+    if user:
+        tip("vendor")
     vendor.render(desk, landing.CSS, signed_in=bool(user))
 
 
@@ -665,4 +701,18 @@ else:
         (st.Page(page_settings, title="Settings", icon="⚙️", url_path="settings"), "settings_view"),
     ]
     allowed = [pg for pg, perm in PAGES if can(perm) or (perm == "settings_view" and can("settings"))]
+    by_path = {pg.url_path or "dashboard": pg for pg in allowed}
+    with st.sidebar:
+        st.session_state["show_guide"] = st.toggle("Show guide", value=st.session_state.get("show_guide", True))
+        if st.session_state["show_guide"]:
+            steps = [(i, k, t) for i, (k, t) in enumerate(GUIDE) if k in by_path]
+            done = sum(1 for i, _, _ in steps if st.session_state.get(f"g{i}"))
+            with st.expander(f"🧭 Guided test · {done}/{len(steps)} done", expanded=done < len(steps)):
+                if user["role"] not in ("Contracts Manager", "Administrator"):
+                    st.caption("Tip: sign in as Contracts Manager to approve, publish and send.")
+                for i, k, t in steps:
+                    a, b = st.columns([1, 6], vertical_alignment="center")
+                    a.checkbox("done", key=f"g{i}", label_visibility="collapsed")
+                    b.page_link(by_path[k], label=t, icon=None)
+    render_user_card()
     st.navigation(allowed).run()
