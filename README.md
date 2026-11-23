@@ -48,6 +48,18 @@ streamlit run streamlit_app.py
 8. **Access & audit:** who can do what, and every action logged.
 9. **Accuracy:** the measured numbers, plus "try your own question".
 
+## Roles
+
+The landing page lets visitors sign in with a passcode, or enter as any role in one click (`demo_roles = true`).
+
+| Role | Can do |
+|---|---|
+| Administrator | Everything, including settings and reset |
+| Contracts Manager | Approve answers, publish addenda, send replies |
+| Contracts Staff | Sort, confirm or move questions, merge, draft answers. Cannot approve or send |
+| Security Reviewer | Access and audit log, settings (read-only), accuracy. Read-only |
+| Viewer | Read-only |
+
 ## Good to know
 
 - Refreshing the browser signs you out. Use the sidebar links to move between pages.

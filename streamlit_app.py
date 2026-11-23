@@ -47,18 +47,36 @@ def get_desk():
 desk = get_desk()
 MAIL = dict(_secret("mail", {}) or {})
 MAIL_ON = bool(MAIL.get("user") and MAIL.get("password"))
-USERS = [dict(u) for u in (_secret("users", None) or [
-    {"name": "Morgan Lee", "role": "Manager", "passcode": "manager-2026"},
-    {"name": "Jordan Reyes", "role": "Staff", "passcode": "staff-2026"},
-])]
 ROLES = {
-    "Viewer": ["view"],
-    "Staff": ["view", "review", "edit"],
-    "Manager": ["view", "review", "edit", "approve", "publish", "send", "settings"],
+    "Administrator": {"perms": ["view", "review", "edit", "approve", "publish", "send", "settings", "audit", "users"], "icon": "🛡️",
+                      "desc": "Runs the system: users and roles, mailbox and settings, plus everything a manager can do."},
+    "Contracts Manager": {"perms": ["view", "review", "edit", "approve", "publish", "send", "audit"], "icon": "✅",
+                          "desc": "Approves answers, publishes addenda and releases replies to vendors."},
+    "Contracts Staff": {"perms": ["view", "review", "edit"], "icon": "🗂️",
+                        "desc": "Sorts questions, confirms or moves matches, merges groups and drafts answers. Cannot approve or send."},
+    "Security Reviewer": {"perms": ["view", "audit", "settings_view"], "icon": "🔐",
+                          "desc": "Reviews who has access, the audit log, data handling and accuracy. Read-only."},
+    "Viewer": {"perms": ["view"], "icon": "👁️",
+               "desc": "Read-only look at emails, questions, answers and replies."},
 }
-PERM_LABEL = {"view": "See emails, questions and answers", "review": "Confirm or move questions",
+_ALIAS = {"Manager": "Contracts Manager", "Staff": "Contracts Staff", "Admin": "Administrator", "Security": "Security Reviewer"}
+USERS = [dict(u) for u in (_secret("users", None) or [
+    {"name": "Avery Collins", "role": "Administrator", "passcode": "admin-2026"},
+    {"name": "Morgan Lee", "role": "Contracts Manager", "passcode": "manager-2026"},
+    {"name": "Jordan Reyes", "role": "Contracts Staff", "passcode": "staff-2026"},
+    {"name": "Sam Patel", "role": "Security Reviewer", "passcode": "security-2026"},
+    {"name": "Riley Brooks", "role": "Viewer", "passcode": "viewer-2026"},
+])]
+for _u in USERS:
+    _u["role"] = _ALIAS.get(_u.get("role"), _u.get("role"))
+    if _u["role"] not in ROLES:
+        _u["role"] = "Viewer"
+# One-click demo sign-in for each role. Set demo_roles = false in secrets to require passcodes.
+DEMO_ROLES = bool(_secret("demo_roles", True))
+PERM_LABEL = {"view": "See emails, questions, answers and replies", "review": "Confirm or move questions in review",
               "edit": "Merge questions, change categories, draft answers", "approve": "Approve answers",
-              "publish": "Publish addenda", "send": "Send replies to vendors", "settings": "Change settings and reset the demo"}
+              "publish": "Publish addenda", "send": "Send replies to vendors", "audit": "See access and the audit log",
+              "settings_view": "See settings (read-only)", "settings": "Change settings and reset the demo", "users": "Manage users and roles"}
 
 st.markdown("""<style>
 mark.q{background:#fff1b8;color:#2a2100;border-radius:4px;padding:1px 4px}
@@ -115,32 +133,28 @@ user = st.session_state.get("user")
 
 
 def can(p):
-    return p in ROLES[(user or {}).get("role", "Viewer")]
+    return bool(user) and p in ROLES[user["role"]]["perms"]
 
 
-with st.sidebar:
-    st.markdown("### 📨 Inquiry Desk")
-    st.caption(f"RFP No. {desk.s('rfp_no')} · {desk.s('rfp_title')}")
-    st.caption("Demo by DataPoch · test data only")
-    if user:
-        st.success(f"Signed in: **{user['name']}** ({user['role']})")
-        if st.button("Sign out", use_container_width=True):
-            desk.log(user["name"], "Signed out"); st.session_state.pop("user"); st.rerun()
-    else:
-        with st.expander("Staff sign in", expanded=False):
-            who = st.selectbox("Name", [u["name"] for u in USERS])
-            code = st.text_input("Passcode", type="password")
-            if st.button("Sign in", use_container_width=True):
-                u = next(u for u in USERS if u["name"] == who)
-                if code == u["passcode"]:
-                    st.session_state["user"] = {"name": u["name"], "role": u["role"]}
-                    desk.log(u["name"], f"Signed in as {u['role']}"); st.rerun()
-                else:
-                    desk.log("System", f"Failed sign-in attempt for {who}"); st.error("Wrong passcode")
-        st.info("Viewing only. Staff sign in to make changes.")
-    st.divider()
-    st.caption(("🟢 Live inbox: " + MAIL["user"]) if MAIL_ON else "⚪ Live inbox not connected (use “Send a test email”)")
-    st.caption("🟢 AI check on" if llm.enabled() else "⚪ AI check off (meaning model only)")
+def sign_in(u, how="passcode"):
+    st.session_state["user"] = {"name": u["name"], "role": u["role"]}
+    desk.log(u["name"], f"Signed in as {u['role']}" + (" (demo access)" if how == "demo" else ""))
+    st.rerun()
+
+
+if user:
+    with st.sidebar:
+        r = ROLES[user["role"]]
+        st.markdown(f"### 📨 Inquiry Desk")
+        st.caption(f"RFP No. {desk.s('rfp_no')} · {desk.s('rfp_title')}")
+        with st.container(border=True):
+            st.markdown(f"{r['icon']} **{user['name']}**  \n<span class='small'>{user['role']}</span>", unsafe_allow_html=True)
+            st.caption(r["desc"])
+            if st.button("Sign out", use_container_width=True):
+                desk.log(user["name"], "Signed out"); st.session_state.pop("user"); st.rerun()
+        st.caption(("🟢 Live inbox: " + MAIL["user"]) if MAIL_ON else "⚪ Live inbox not connected")
+        st.caption("🟢 AI check on" if llm.enabled() else "⚪ AI check off (meaning model only)")
+        st.caption("Demo by DataPoch · test data only")
 
 
 def who():
@@ -468,12 +482,26 @@ def page_tracker():
 
 def page_access():
     st.title("Access & audit")
-    st.markdown("#### Who can do what right now")
-    st.dataframe(pd.DataFrame([{"Permission": PERM_LABEL[p], **{f"{u['name']} ({u['role']})": "✓" if p in ROLES[u["role"]] else "" for u in USERS},
-                                "Anyone with the link (Viewer)": "✓" if p == "view" else ""} for p in PERM_LABEL]), hide_index=True, use_container_width=True)
-    st.caption("Staff draft and sort; only Managers approve, publish and send. In production, sign-in uses your Microsoft accounts with multi-factor authentication.")
-    st.markdown("#### Audit log")
-    st.dataframe(pd.DataFrame([{"When (ET)": fmt(e["at"]), "Who": e["who"], "Action": e["what"]} for e in desk.events(300)]), hide_index=True, use_container_width=True, height=380)
+    st.caption("Who can sign in, what each role can do, and every action taken. Separation of duties: the person who drafts an answer is not the person who approves and sends it.")
+    t1, t2, t3 = st.tabs(["People and roles", "Permissions by role", "Audit log"])
+    with t1:
+        c = st.columns(len(ROLES))
+        for col, (rn, r) in zip(c, ROLES.items()):
+            col.metric(f"{r['icon']} {rn}", sum(1 for u in USERS if u["role"] == rn))
+        st.dataframe(pd.DataFrame([{"Name": u["name"], "Role": u["role"], "What they can do": ROLES[u["role"]]["desc"],
+                                    "Signed in now": "✓ (you)" if user and u["name"] == user["name"] else ""} for u in USERS]),
+                     hide_index=True, use_container_width=True)
+        last = [e for e in desk.events(400) if e["what"].startswith(("Signed in", "Signed out", "Failed sign-in"))][:10]
+        st.markdown("**Recent sign-ins**")
+        st.dataframe(pd.DataFrame([{"When (ET)": fmt(e["at"]), "Who": e["who"], "Event": e["what"]} for e in last]) if last else pd.DataFrame(),
+                     hide_index=True, use_container_width=True)
+        if can("users"):
+            st.info("Administrator: in this demo, accounts and passcodes are set in the app's Secrets on Streamlit Cloud. In production, sign-in uses the agency's Microsoft accounts with multi-factor authentication, and access follows the agency directory.")
+    with t2:
+        st.dataframe(pd.DataFrame([{"Permission": PERM_LABEL[p], **{rn: "✓" if p in r["perms"] else "" for rn, r in ROLES.items()}} for p in PERM_LABEL]),
+                     hide_index=True, use_container_width=True)
+    with t3:
+        st.dataframe(pd.DataFrame([{"When (ET)": fmt(e["at"]), "Who": e["who"], "Action": e["what"]} for e in desk.events(300)]), hide_index=True, use_container_width=True, height=420)
 
 
 def page_accuracy():
@@ -544,7 +572,13 @@ def page_accuracy():
 def page_settings():
     st.title("Settings")
     if not can("settings"):
-        st.info("Managers can change settings."); return
+        st.info("Read-only. Only an Administrator can change settings.")
+        st.dataframe(pd.DataFrame([{"Setting": k, "Value": desk.s(k)} for k in ("rfp_no", "rfp_title", "deadline", "due", "live_on_time", "next_addendum")]), hide_index=True, use_container_width=True)
+        st.markdown("**Data handling in this demo**")
+        st.markdown(f"- Test data only, no agency data\n- Live inbox: {'connected (' + MAIL['user'] + ')' if MAIL_ON else 'not connected'}\n"
+                    f"- AI check: {'on, ' + llm.CFG['model'] if llm.enabled() else 'off'} (used only to confirm uncertain matches; no data is used to train models under the provider's API terms; check the provider's current terms)\n"
+                    "- Every action is written to the audit log")
+        return
     c1, c2 = st.columns(2)
     for k, label, col in [("rfp_no", "RFP number", c1), ("rfp_title", "RFP title", c2), ("deadline", "Inquiry deadline (YYYY-MM-DDTHH:MM, Eastern)", c1),
                           ("due", "Proposal due date (as shown in replies)", c2), ("org", "Organization name in replies", c1)]:
@@ -561,17 +595,112 @@ def page_settings():
         desk.reset(); desk.log(who(), "Cleared all data"); st.session_state.pop("sel_email", None); st.rerun()
 
 
+LANDING_CSS = """<style>
+[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],header[data-testid="stHeader"]{display:none}
+.block-container{padding-top:1.2rem;max-width:1180px}
+.hero{background:linear-gradient(135deg,#0f3d4a 0%,#14606f 55%,#1a7f93 100%);color:#eef7f8;border-radius:18px;padding:44px 44px 38px;margin-bottom:22px}
+.hero .tag{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:999px;margin-bottom:14px}
+.hero h1{color:#fff;font-size:44px;line-height:1.08;margin:0 0 14px;font-weight:700;letter-spacing:-.02em}
+.hero p{font-size:19px;line-height:1.5;color:#d6ecef;max-width:760px;margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px}
+.stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:14px 16px}
+.stat b{display:block;font-size:26px;color:#fff}.stat span{font-size:13px;color:#cfe6ea}
+.sec{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#1a7f93;font-weight:700;margin:26px 0 6px}
+.h2{font-size:28px;font-weight:700;color:#15212c;margin:0 0 14px;letter-spacing:-.01em}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.card{background:#fff;border:1px solid #e1e7ec;border-radius:14px;padding:18px}
+.card h4{margin:0 0 6px;font-size:16px;color:#15212c}.card p{margin:0;font-size:14px;line-height:1.5;color:#4d5b68}
+.step{background:#fff;border:1px solid #e1e7ec;border-radius:12px;padding:14px}
+.step .n{font-family:monospace;font-size:12px;color:#1a7f93;font-weight:700}.step b{display:block;margin:4px 0 2px;color:#15212c}
+.step span{font-size:13px;color:#5b6b7a}
+.trust{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.trust div{background:#f1f8f9;border:1px solid #d3e8ec;border-radius:12px;padding:14px;font-size:14px;color:#14606f}
+.trust b{display:block;color:#0f3d4a;margin-bottom:2px}
+.foot{color:#7a8794;font-size:13px;text-align:center;margin:30px 0 10px}
+@media (max-width:900px){.stats,.trust{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.grid6{grid-template-columns:repeat(2,1fr)}.hero{padding:28px 22px}.hero h1{font-size:32px}}
+</style>"""
+
+
+def page_landing():
+    st.markdown(LANDING_CSS, unsafe_allow_html=True)
+    em, gs = desk.emails(), desk.groups()
+    nq = sum(g["n"] for g in gs)
+    st.markdown(f"""<div class="hero"><span class="tag">Inquiry Desk · by DataPoch</span>
+<h1>Every vendor question answered once, on time, and on the record.</h1>
+<p>Inquiry Desk reads the procurement mailbox, finds every question in every email, groups repeats by meaning, and helps your team publish one addendum and reply to every vendor. Staff approve every answer.</p>
+<div class="stats"><div class="stat"><b>{len(em)}</b><span>vendor emails in this demo</span></div>
+<div class="stat"><b>{nq}</b><span>questions found inside them</span></div>
+<div class="stat"><b>{len(gs)}</b><span>unique questions to answer</span></div>
+<div class="stat"><b>{round((1 - len(gs) / max(1, nq)) * 100)}%</b><span>were repeats staff never re-read</span></div></div></div>""", unsafe_allow_html=True)
+
+    left, right = st.columns([3, 2], gap="large")
+    with left:
+        st.markdown('<div class="sec">The problem</div><div class="h2">Hundreds of emails, mostly the same questions</div>', unsafe_allow_html=True)
+        st.markdown("""<div class="card"><p>When an RFP draws heavy interest, contracts staff read every email, spot the repeats, write answers, compile an addendum and reply to each vendor by hand. Late questions pile up, deadlines move, and every vendor waits. Inquiry Desk takes the reading, sorting and copying off staff, and leaves every decision with them.</p></div>""", unsafe_allow_html=True)
+    with right:
+        st.markdown('<div class="sec">Sign in</div><div class="h2">Open the demo</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            name = st.selectbox("Account", [f"{u['name']} · {u['role']}" for u in USERS], label_visibility="collapsed")
+            code = st.text_input("Passcode", type="password", placeholder="Passcode")
+            if st.button("Sign in", type="primary", use_container_width=True):
+                u = USERS[[f"{x['name']} · {x['role']}" for x in USERS].index(name)]
+                if code and code == u.get("passcode"):
+                    sign_in(u)
+                else:
+                    desk.log("System", f"Failed sign-in attempt for {u['name']}"); st.error("That passcode is not right.")
+            st.caption("Accounts follow separation of duties. In production, sign-in uses the agency's Microsoft accounts with multi-factor authentication.")
+
+    if DEMO_ROLES:
+        st.markdown('<div class="sec">Try it as any role</div><div class="h2">See what each person on the team can do</div>', unsafe_allow_html=True)
+        cols = st.columns(len(ROLES))
+        for col, (rn, r) in zip(cols, ROLES.items()):
+            u = next((x for x in USERS if x["role"] == rn), None)
+            with col.container(border=True):
+                st.markdown(f"#### {r['icon']} {rn}")
+                st.caption(r["desc"])
+                if u and st.button(f"Enter as {rn}", key=f"demo_{rn}", use_container_width=True):
+                    sign_in(u, "demo")
+        st.caption("Demo access: one click per role, test data only.")
+
+    st.markdown('<div class="sec">How it works</div><div class="h2">From inbox to addendum in six steps</div>', unsafe_allow_html=True)
+    steps = [("Log", "Every email saved with an ID; late ones flagged"), ("Split", "Each question in an email found separately"),
+             ("Group", "Same meaning, one question; originals kept"), ("Review", "Only uncertain matches go to staff"),
+             ("Approve & publish", "Manager approves; addendum issued"), ("Reply", "One reply per email, every Q# listed")]
+    st.markdown('<div class="grid6">' + "".join(f'<div class="step"><span class="n">0{i}</span><b>{t}</b><span>{d}</span></div>' for i, (t, d) in enumerate(steps, 1)) + "</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="sec">What your team gets</div><div class="h2">Built around the questions procurement teams ask</div>', unsafe_allow_html=True)
+    feats = [("Every original, one click away", "Each grouped question links to the vendor's email, with their exact sentence highlighted."),
+             ("Several questions in one email", "Each question is matched on its own, so one email can map to several answers."),
+             ("Grouped by meaning", "“How much has the Commission set aside?” joins the budget question, even without the word budget."),
+             ("Merge and undo", "When questions are merged, both originals stay visible and the merge can be reversed."),
+             ("A reply for every email", "The Reply tracker shows each email, its questions, their answer numbers and whether the reply went out."),
+             ("Measured accuracy", "Accuracy is tested on questions the system never saw, and uncertain items always go to staff.")]
+    st.markdown('<div class="grid3">' + "".join(f'<div class="card"><h4>{t}</h4><p>{d}</p></div>' for t, d in feats) + "</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="sec">Control and security</div><div class="h2">Your staff stay in charge</div>', unsafe_allow_html=True)
+    st.markdown("""<div class="trust"><div><b>Human approval</b>No answer or email reaches a vendor without a named approver.</div>
+<div><b>Separation of duties</b>Staff draft; managers approve and send; security reviews.</div>
+<div><b>Full audit trail</b>Every sign-in, decision and email is logged with who and when.</div>
+<div><b>Your environment</b>In production: hosted in the United States or inside your own Microsoft tenant.</div></div>""", unsafe_allow_html=True)
+    st.markdown('<div class="foot">Inquiry Desk demo by DataPoch · sample data based on public RFP documents · no agency data is used</div>', unsafe_allow_html=True)
+
+
 P_MERGE = st.Page(page_merge, title="Merge report", icon="🧾", url_path="merge")
-nav = st.navigation([
-    st.Page(page_dashboard, title="Dashboard", icon="📊", default=True),
-    st.Page(page_inbox, title="Inbox", icon="📥", url_path="inbox"),
-    st.Page(page_review, title=f"Needs review ({len(desk.review_queue())})", icon="⚠️", url_path="review"),
-    st.Page(page_questions, title="Questions", icon="❓", url_path="questions"),
-    P_MERGE,
-    st.Page(page_answers, title="Answers & addendum", icon="✍️", url_path="answers"),
-    st.Page(page_tracker, title="Reply tracker", icon="📤", url_path="tracker"),
-    st.Page(page_access, title="Access & audit", icon="🔐", url_path="access"),
-    st.Page(page_accuracy, title="Accuracy", icon="🎯", url_path="accuracy"),
-    st.Page(page_settings, title="Settings", icon="⚙️", url_path="settings"),
-])
-nav.run()
+if not user:
+    st.navigation([st.Page(page_landing, title="Inquiry Desk", icon="📨", default=True)], position="hidden").run()
+else:
+    PAGES = [
+        (st.Page(page_dashboard, title="Dashboard", icon="📊", default=True), "view"),
+        (st.Page(page_inbox, title="Inbox", icon="📥", url_path="inbox"), "view"),
+        (st.Page(page_review, title=f"Needs review ({len(desk.review_queue())})", icon="⚠️", url_path="review"), "review"),
+        (st.Page(page_questions, title="Questions", icon="❓", url_path="questions"), "view"),
+        (P_MERGE, "view"),
+        (st.Page(page_answers, title="Answers & addendum", icon="✍️", url_path="answers"), "view"),
+        (st.Page(page_tracker, title="Reply tracker", icon="📤", url_path="tracker"), "view"),
+        (st.Page(page_access, title="Access & audit", icon="🔐", url_path="access"), "audit"),
+        (st.Page(page_accuracy, title="Accuracy", icon="🎯", url_path="accuracy"), "view"),
+        (st.Page(page_settings, title="Settings", icon="⚙️", url_path="settings"), "settings_view"),
+    ]
+    allowed = [pg for pg, perm in PAGES if can(perm) or (perm == "settings_view" and can("settings"))]
+    st.navigation(allowed).run()
