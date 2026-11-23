@@ -595,95 +595,21 @@ def page_settings():
         desk.reset(); desk.log(who(), "Cleared all data"); st.session_state.pop("sel_email", None); st.rerun()
 
 
-LANDING_CSS = """<style>
-[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],header[data-testid="stHeader"]{display:none}
-.block-container{padding-top:1.2rem;max-width:1180px}
-.hero{background:linear-gradient(135deg,#0f3d4a 0%,#14606f 55%,#1a7f93 100%);color:#eef7f8;border-radius:18px;padding:44px 44px 38px;margin-bottom:22px}
-.hero .tag{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:999px;margin-bottom:14px}
-.hero h1{color:#fff;font-size:44px;line-height:1.08;margin:0 0 14px;font-weight:700;letter-spacing:-.02em}
-.hero p{font-size:19px;line-height:1.5;color:#d6ecef;max-width:760px;margin:0}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px}
-.stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:14px 16px}
-.stat b{display:block;font-size:26px;color:#fff}.stat span{font-size:13px;color:#cfe6ea}
-.sec{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#1a7f93;font-weight:700;margin:26px 0 6px}
-.h2{font-size:28px;font-weight:700;color:#15212c;margin:0 0 14px;letter-spacing:-.01em}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
-.card{background:#fff;border:1px solid #e1e7ec;border-radius:14px;padding:18px}
-.card h4{margin:0 0 6px;font-size:16px;color:#15212c}.card p{margin:0;font-size:14px;line-height:1.5;color:#4d5b68}
-.step{background:#fff;border:1px solid #e1e7ec;border-radius:12px;padding:14px}
-.step .n{font-family:monospace;font-size:12px;color:#1a7f93;font-weight:700}.step b{display:block;margin:4px 0 2px;color:#15212c}
-.step span{font-size:13px;color:#5b6b7a}
-.trust{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.trust div{background:#f1f8f9;border:1px solid #d3e8ec;border-radius:12px;padding:14px;font-size:14px;color:#14606f}
-.trust b{display:block;color:#0f3d4a;margin-bottom:2px}
-.foot{color:#7a8794;font-size:13px;text-align:center;margin:30px 0 10px}
-@media (max-width:900px){.stats,.trust{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.grid6{grid-template-columns:repeat(2,1fr)}.hero{padding:28px 22px}.hero h1{font-size:32px}}
-</style>"""
+import landing
+
+
+def _signin_with_code(u, code):
+    if code and code == u.get("passcode"):
+        sign_in(u)
+    else:
+        desk.log("System", f"Failed sign-in attempt for {u['name']}")
+        st.error("That passcode is not right.")
 
 
 def page_landing():
-    st.markdown(LANDING_CSS, unsafe_allow_html=True)
     em, gs = desk.emails(), desk.groups()
-    nq = sum(g["n"] for g in gs)
-    st.markdown(f"""<div class="hero"><span class="tag">Inquiry Desk · by DataPoch</span>
-<h1>Every vendor question answered once, on time, and on the record.</h1>
-<p>Inquiry Desk reads the procurement mailbox, finds every question in every email, groups repeats by meaning, and helps your team publish one addendum and reply to every vendor. Staff approve every answer.</p>
-<div class="stats"><div class="stat"><b>{len(em)}</b><span>vendor emails in this demo</span></div>
-<div class="stat"><b>{nq}</b><span>questions found inside them</span></div>
-<div class="stat"><b>{len(gs)}</b><span>unique questions to answer</span></div>
-<div class="stat"><b>{round((1 - len(gs) / max(1, nq)) * 100)}%</b><span>were repeats staff never re-read</span></div></div></div>""", unsafe_allow_html=True)
-
-    left, right = st.columns([3, 2], gap="large")
-    with left:
-        st.markdown('<div class="sec">The problem</div><div class="h2">Hundreds of emails, mostly the same questions</div>', unsafe_allow_html=True)
-        st.markdown("""<div class="card"><p>When an RFP draws heavy interest, contracts staff read every email, spot the repeats, write answers, compile an addendum and reply to each vendor by hand. Late questions pile up, deadlines move, and every vendor waits. Inquiry Desk takes the reading, sorting and copying off staff, and leaves every decision with them.</p></div>""", unsafe_allow_html=True)
-    with right:
-        st.markdown('<div class="sec">Sign in</div><div class="h2">Open the demo</div>', unsafe_allow_html=True)
-        with st.container(border=True):
-            name = st.selectbox("Account", [f"{u['name']} · {u['role']}" for u in USERS], label_visibility="collapsed")
-            code = st.text_input("Passcode", type="password", placeholder="Passcode")
-            if st.button("Sign in", type="primary", use_container_width=True):
-                u = USERS[[f"{x['name']} · {x['role']}" for x in USERS].index(name)]
-                if code and code == u.get("passcode"):
-                    sign_in(u)
-                else:
-                    desk.log("System", f"Failed sign-in attempt for {u['name']}"); st.error("That passcode is not right.")
-            st.caption("Accounts follow separation of duties. In production, sign-in uses the agency's Microsoft accounts with multi-factor authentication.")
-
-    if DEMO_ROLES:
-        st.markdown('<div class="sec">Try it as any role</div><div class="h2">See what each person on the team can do</div>', unsafe_allow_html=True)
-        cols = st.columns(len(ROLES))
-        for col, (rn, r) in zip(cols, ROLES.items()):
-            u = next((x for x in USERS if x["role"] == rn), None)
-            with col.container(border=True):
-                st.markdown(f"#### {r['icon']} {rn}")
-                st.caption(r["desc"])
-                if u and st.button(f"Enter as {rn}", key=f"demo_{rn}", use_container_width=True):
-                    sign_in(u, "demo")
-        st.caption("Demo access: one click per role, test data only.")
-
-    st.markdown('<div class="sec">How it works</div><div class="h2">From inbox to addendum in six steps</div>', unsafe_allow_html=True)
-    steps = [("Log", "Every email saved with an ID; late ones flagged"), ("Split", "Each question in an email found separately"),
-             ("Group", "Same meaning, one question; originals kept"), ("Review", "Only uncertain matches go to staff"),
-             ("Approve & publish", "Manager approves; addendum issued"), ("Reply", "One reply per email, every Q# listed")]
-    st.markdown('<div class="grid6">' + "".join(f'<div class="step"><span class="n">0{i}</span><b>{t}</b><span>{d}</span></div>' for i, (t, d) in enumerate(steps, 1)) + "</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="sec">What your team gets</div><div class="h2">Built around the questions procurement teams ask</div>', unsafe_allow_html=True)
-    feats = [("Every original, one click away", "Each grouped question links to the vendor's email, with their exact sentence highlighted."),
-             ("Several questions in one email", "Each question is matched on its own, so one email can map to several answers."),
-             ("Grouped by meaning", "“How much has the Commission set aside?” joins the budget question, even without the word budget."),
-             ("Merge and undo", "When questions are merged, both originals stay visible and the merge can be reversed."),
-             ("A reply for every email", "The Reply tracker shows each email, its questions, their answer numbers and whether the reply went out."),
-             ("Measured accuracy", "Accuracy is tested on questions the system never saw, and uncertain items always go to staff.")]
-    st.markdown('<div class="grid3">' + "".join(f'<div class="card"><h4>{t}</h4><p>{d}</p></div>' for t, d in feats) + "</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="sec">Control and security</div><div class="h2">Your staff stay in charge</div>', unsafe_allow_html=True)
-    st.markdown("""<div class="trust"><div><b>Human approval</b>No answer or email reaches a vendor without a named approver.</div>
-<div><b>Separation of duties</b>Staff draft; managers approve and send; security reviews.</div>
-<div><b>Full audit trail</b>Every sign-in, decision and email is logged with who and when.</div>
-<div><b>Your environment</b>In production: hosted in the United States or inside your own Microsoft tenant.</div></div>""", unsafe_allow_html=True)
-    st.markdown('<div class="foot">Inquiry Desk demo by DataPoch · sample data based on public RFP documents · no agency data is used</div>', unsafe_allow_html=True)
+    landing.render((len(em), sum(g["n"] for g in gs), len(gs)), ROLES, USERS, DEMO_ROLES,
+                   on_role=lambda u: sign_in(u, "demo"), on_signin=_signin_with_code, rfp=desk.s("rfp_no"))
 
 
 P_MERGE = st.Page(page_merge, title="Merge report", icon="🧾", url_path="merge")
