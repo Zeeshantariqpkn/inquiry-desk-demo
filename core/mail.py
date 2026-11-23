@@ -33,11 +33,18 @@ def fetch_unseen(cfg, limit=25):
     box = imaplib.IMAP4_SSL(cfg.get("imap_host", "imap.gmail.com"))
     box.login(cfg["user"], cfg["password"])
     box.select("INBOX")
-    _, data = box.search(None, "UNSEEN")
+    only_to = (cfg.get("only_to") or "").strip()
+    if only_to:
+        # Only emails addressed to this exact address are read; everything else is left untouched.
+        _, data = box.search(None, "UNSEEN", "TO", f'"{only_to}"')
+    else:
+        _, data = box.search(None, "UNSEEN")
     out = []
     for num in data[0].split()[-limit:]:
         _, msgdata = box.fetch(num, "(RFC822)")
         msg = email.message_from_bytes(msgdata[0][1])
+        if only_to and only_to.lower() not in (_dec(msg.get("To")) + " " + _dec(msg.get("Cc")) + " " + _dec(msg.get("Delivered-To"))).lower():
+            continue  # double check, so no other email is ever stored
         name, addr = parseaddr(_dec(msg.get("From")))
         try:
             when = parsedate_to_datetime(msg.get("Date"))

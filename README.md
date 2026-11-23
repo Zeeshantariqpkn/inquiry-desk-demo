@@ -15,7 +15,17 @@ Test data only. No real agency data.
 4. Click **Deploy**. The first start takes a few minutes while the meaning model downloads.
 5. Open the **Accuracy** page. It should say **Engine: Meaning model (bge-small-en-v1.5)**. If it says "Backup", the model didn't download; reboot the app from the menu.
 
+## Optional: Sign in with Google
+
+1. console.cloud.google.com → create a project → **Google Auth Platform**.
+2. **Branding**: app name "Inquiry Desk", your support email. **Audience**: External; while it is in Testing, only the **test users** you add can sign in.
+3. **Clients → Create client → Web application**. Authorized redirect URI: `https://YOUR-APP.streamlit.app/oauth2callback`
+4. Copy the client ID and secret into the `[auth]` and `[auth.google]` secrets, and list who gets which role in `[google_roles]`.
+
 ## Optional: live inbox (Jake's team emails it during the call)
+
+Tip: you can use your own Gmail safely. Set `only_to = "yourname+rfpdemo@gmail.com"` and the app reads only emails sent to that address. Everything else in your inbox is never read or marked.
+
 
 1. Create a free Gmail account, e.g. `datapoch.rfpdemo@gmail.com`.
 2. Turn on 2-Step Verification, then create an **App password** (Google Account → Security → App passwords).

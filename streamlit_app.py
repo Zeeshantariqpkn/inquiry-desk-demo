@@ -47,6 +47,7 @@ def get_desk():
 desk = get_desk()
 MAIL = dict(_secret("mail", {}) or {})
 MAIL_ON = bool(MAIL.get("user") and MAIL.get("password"))
+INBOX_ADDR = (MAIL.get("only_to") or MAIL.get("user") or "")
 ROLES = {
     "Administrator": {"perms": ["view", "review", "edit", "approve", "publish", "send", "settings", "audit", "users"], "icon": "🛡️",
                       "desc": "Runs the system: users and roles, mailbox and settings, plus everything a manager can do."},
@@ -131,6 +132,22 @@ def highlight(body, parts, focus=None):
 # ---------------- sign in ----------------
 user = st.session_state.get("user")
 
+# Optional "Sign in with Google" (Streamlit's built-in login). Active only when [auth] is set in Secrets.
+AUTH_ON = bool(_secret("auth", None)) and hasattr(st, "login")
+GOOGLE_ROLES = {k.lower(): _ALIAS.get(v, v) for k, v in dict(_secret("google_roles", {}) or {}).items()}
+GOOGLE_DEFAULT = _ALIAS.get(_secret("google_default_role", "Viewer"), _secret("google_default_role", "Viewer"))
+if not user and AUTH_ON:
+    try:
+        if st.user.is_logged_in:
+            email = (st.user.get("email") or "").lower()
+            role = GOOGLE_ROLES.get(email, GOOGLE_DEFAULT)
+            role = role if role in ROLES else "Viewer"
+            user = {"name": st.user.get("name") or email, "role": role, "email": email, "via": "google"}
+            st.session_state["user"] = user
+            desk.log(user["name"], f"Signed in with Google as {role}")
+    except Exception:
+        pass
+
 
 def can(p):
     return bool(user) and p in ROLES[user["role"]]["perms"]
@@ -151,8 +168,11 @@ if user:
             st.markdown(f"{r['icon']} **{user['name']}**  \n<span class='small'>{user['role']}</span>", unsafe_allow_html=True)
             st.caption(r["desc"])
             if st.button("Sign out", use_container_width=True):
-                desk.log(user["name"], "Signed out"); st.session_state.pop("user"); st.rerun()
-        st.caption(("🟢 Live inbox: " + MAIL["user"]) if MAIL_ON else "⚪ Live inbox not connected")
+                desk.log(user["name"], "Signed out"); st.session_state.pop("user")
+                if user.get("via") == "google":
+                    st.logout()
+                st.rerun()
+        st.caption(("🟢 Live inbox: " + INBOX_ADDR) if MAIL_ON else "⚪ Live inbox not connected")
         st.caption("🟢 AI check on" if llm.enabled() else "⚪ AI check off (meaning model only)")
         st.caption("Demo by DataPoch · test data only")
 
@@ -176,8 +196,8 @@ def poll_mail(force=False):
         return 0
     n = 0
     for m in msgs:
-        if m["from_email"].lower() == MAIL["user"].lower():
-            continue
+        if not MAIL.get("only_to") and m["from_email"].lower() == MAIL["user"].lower():
+            continue  # our own sent replies
         if desk.ingest(m["from_name"], m["from_email"], m["subject"] or "(no subject)", m["body"], None, "live", m["msgid"]):
             n += 1
     return n
@@ -216,7 +236,7 @@ def page_dashboard():
 def page_inbox():
     st.title("Inbox")
     top = st.columns([3, 1, 1])
-    top[0].caption(f"Every email is saved with an ID, split into its questions and matched. {'Live inbox: ' + MAIL['user'] if MAIL_ON else 'Live inbox not connected: use “Send a test email”.'}")
+    top[0].caption(f"Every email is saved with an ID, split into its questions and matched. {'Live inbox: ' + INBOX_ADDR if MAIL_ON else 'Live inbox not connected: use “Send a test email”.'}")
     if MAIL_ON and top[1].button("Check inbox now"):
         n = poll_mail(force=True); st.toast(f"{n} new email{'s' if n != 1 else ''}")
     auto = top[2].toggle("Auto-check", value=MAIL_ON, disabled=not MAIL_ON, help="Checks the test inbox every 20 seconds while this page is open")
@@ -575,7 +595,7 @@ def page_settings():
         st.info("Read-only. Only an Administrator can change settings.")
         st.dataframe(pd.DataFrame([{"Setting": k, "Value": desk.s(k)} for k in ("rfp_no", "rfp_title", "deadline", "due", "live_on_time", "next_addendum")]), hide_index=True, use_container_width=True)
         st.markdown("**Data handling in this demo**")
-        st.markdown(f"- Test data only, no agency data\n- Live inbox: {'connected (' + MAIL['user'] + ')' if MAIL_ON else 'not connected'}\n"
+        st.markdown(f"- Test data only, no agency data\n- Live inbox: {'connected (' + INBOX_ADDR + ')' if MAIL_ON else 'not connected'}\n"
                     f"- AI check: {'on, ' + llm.CFG['model'] if llm.enabled() else 'off'} (used only to confirm uncertain matches; no data is used to train models under the provider's API terms; check the provider's current terms)\n"
                     "- Every action is written to the audit log")
         return
@@ -609,7 +629,8 @@ def _signin_with_code(u, code):
 def page_landing():
     em, gs = desk.emails(), desk.groups()
     landing.render((len(em), sum(g["n"] for g in gs), len(gs)), ROLES, USERS, DEMO_ROLES,
-                   on_role=lambda u: sign_in(u, "demo"), on_signin=_signin_with_code, rfp=desk.s("rfp_no"))
+                   on_role=lambda u: sign_in(u, "demo"), on_signin=_signin_with_code, rfp=desk.s("rfp_no"),
+                   on_google=(lambda: st.login("google") if "google" in dict(_secret("auth", {}) or {}) else st.login()) if AUTH_ON else None)
 
 
 P_MERGE = st.Page(page_merge, title="Merge report", icon="🧾", url_path="merge")

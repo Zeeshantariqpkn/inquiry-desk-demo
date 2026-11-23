@@ -123,7 +123,7 @@ def _md(x, **_):
     st.markdown(" ".join(x.split("\n")), unsafe_allow_html=True)
 
 
-def render(stats, roles, users, demo_roles, on_role, on_signin, rfp):
+def render(stats, roles, users, demo_roles, on_role, on_signin, rfp, on_google=None):
     e = html.escape
     st.markdown(CSS, unsafe_allow_html=True)
     em, nq, ng = stats
@@ -219,6 +219,11 @@ def render(stats, roles, users, demo_roles, on_role, on_signin, rfp):
                         '<p class="lp-sub" style="font-size:15px">Accounts follow separation of duties. In production, sign-in uses the agency\'s Microsoft accounts with multi-factor authentication.</p></div>',
                         unsafe_allow_html=True)
         with b, st.container(border=True):
+            if on_google:
+                if st.button("Sign in with Google", use_container_width=True, icon=":material/login:"):
+                    on_google()
+                st.caption("Your role is set by the administrator for your Google account.")
+                st.divider()
             labels = [f"{u['name']} · {u['role']}" for u in users]
             pick = st.selectbox("Account", labels)
             code = st.text_input("Passcode", type="password", placeholder="Passcode")
