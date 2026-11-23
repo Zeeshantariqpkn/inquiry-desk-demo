@@ -46,6 +46,10 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
+## Vendor portal (no email setup needed)
+
+Anyone with the link can open **/vendor** (or click "Vendor portal" on the landing page), submit questions without signing in, and get a reference number. After a Contracts Manager answers, publishes and sends replies, the vendor checks the status with the reference number and their email, and reads the full reply there. With the live inbox connected, the same reply is also emailed.
+
 ## Demo script (about 10 minutes)
 
 1. **Dashboard:** emails in, questions found, unique questions, % repeats.

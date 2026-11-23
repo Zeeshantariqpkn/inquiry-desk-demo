@@ -267,7 +267,7 @@ def page_inbox():
         rows.append({"ID": e["id"], "Received": fmt(e["received"]), "From": f"{e['from_name']} · {e['firm']}", "Subject": e["subject"],
                      "Questions": len(ps), "Timing": "Late" if e["late"] else "On time",
                      "Status": {"replied": "Replied", "ready": "Ready to reply", "review": "Needs review", "waiting": "Waiting for answer"}.get(stt, stt),
-                     "Source": {"seed": "Sample", "live": "Live email", "sim": "Test form"}[e["source"]]})
+                     "Source": {"seed": "Sample", "live": "Live email", "sim": "Test form", "portal": "Vendor portal"}.get(e["source"], e["source"])})
     df = pd.DataFrame(rows)
     flt = st.segmented_control("Show", ["All", "Live and test", "Several questions", "Needs review", "Late"], default="All")
     if flt == "Live and test":
@@ -426,8 +426,16 @@ def page_answers():
         col.metric(STATUS[s][0], sum(1 for g in gs if g["status"] == s))
     left, right = st.columns([2, 3])
     with left:
-        ids = [g["id"] for g in sorted(gs, key=lambda g: (["needs-answer", "draft", "approved", "published"].index(g["status"]), -g["n"]))]
-        gid = st.radio("Question", ids, format_func=lambda i: next(f"[{STATUS[g['status']][0]}] {g['n']}× {g['title'][:70]}" for g in gs if g["id"] == i), label_visibility="collapsed")
+        # Stable order (by question number) so the selection never jumps after saving or approving.
+        show = st.segmented_control("Show", ["All", "To do", "Approved", "Published"], default="All", key="ans_filter")
+        want = {"All": None, "To do": ("needs-answer", "draft"), "Approved": ("approved",), "Published": ("published",)}[show or "All"]
+        ids = [g["id"] for g in sorted(gs, key=lambda g: g["id"]) if not want or g["status"] in want]
+        if not ids:
+            st.info("Nothing here."); return
+        cur = st.session_state.get("ans_sel")
+        gid = st.radio("Question", ids, index=ids.index(cur) if cur in ids else 0, label_visibility="collapsed",
+                       format_func=lambda i: next(f"[{STATUS[g['status']][0]}] {g['n']}× {g['title'][:70]}" for g in gs if g["id"] == i))
+        st.session_state["ans_sel"] = gid
     with right:
         g = desk.group(gid)
         st.markdown(f"**{html.escape(g['title'])}**  \n{pill(g['category'], 'info')}{gstatus(g)}", unsafe_allow_html=True)
@@ -483,7 +491,7 @@ def page_tracker():
         prog = st.progress(0.0)
         for i, (e, ps) in enumerate(ready):
             subj, body = desk.compose(e, ps)
-            mode = "simulated (test address)"
+            mode = "shown in vendor portal" if e["source"] == "portal" else "simulated (test address)"
             if MAIL_ON and e["source"] == "live":
                 try:
                     mailer.send(MAIL, e["from_email"], subj, body, e["msgid"]); mode = "sent"
@@ -616,6 +624,7 @@ def page_settings():
 
 
 import landing
+import vendor
 
 
 def _signin_with_code(u, code):
@@ -624,6 +633,10 @@ def _signin_with_code(u, code):
     else:
         desk.log("System", f"Failed sign-in attempt for {u['name']}")
         st.error("That passcode is not right.")
+
+
+def page_vendor():
+    vendor.render(desk, landing.CSS, signed_in=bool(user))
 
 
 def page_landing():
@@ -635,11 +648,13 @@ def page_landing():
 
 P_MERGE = st.Page(page_merge, title="Merge report", icon="🧾", url_path="merge")
 if not user:
-    st.navigation([st.Page(page_landing, title="Inquiry Desk", icon="📨", default=True)], position="hidden").run()
+    st.navigation([st.Page(page_landing, title="Inquiry Desk", icon="📨", default=True),
+                   st.Page(page_vendor, title="Vendor portal", icon="✉️", url_path="vendor")], position="hidden").run()
 else:
     PAGES = [
         (st.Page(page_dashboard, title="Dashboard", icon="📊", default=True), "view"),
         (st.Page(page_inbox, title="Inbox", icon="📥", url_path="inbox"), "view"),
+        (st.Page(page_vendor, title="Vendor portal", icon="✉️", url_path="vendor"), "view"),
         (st.Page(page_review, title=f"Needs review ({len(desk.review_queue())})", icon="⚠️", url_path="review"), "review"),
         (st.Page(page_questions, title="Questions", icon="❓", url_path="questions"), "view"),
         (P_MERGE, "view"),

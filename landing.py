@@ -37,6 +37,7 @@ CSS = """<style>
 .lp-ctas{display:flex;gap:12px;flex-wrap:wrap}
 .lp-btn{display:inline-block;padding:13px 20px;border-radius:11px;font-weight:600;font-size:15px;text-decoration:none!important}
 .lp-btn.p{background:#fff;color:#0f3d4a!important}.lp-btn.s{border:1px solid rgba(255,255,255,.35);color:#fff!important}
+.lp-vendor{margin-top:16px}.lp-vendor a{color:#8fe3ef!important;font-weight:600;font-size:14.5px;text-decoration:none!important;border-bottom:1px solid rgba(143,227,239,.4)}
 .lp-note{font-size:13px;color:#a9cdd4;margin-top:14px}
 /* product preview */
 .lp-win{background:#fff;border-radius:14px;box-shadow:0 30px 60px rgba(0,0,0,.28);overflow:hidden;color:#1f2a33}
@@ -131,14 +132,14 @@ def render(stats, roles, users, demo_roles, on_role, on_signin, rfp, on_google=N
 
     _md(f"""<div class="lp">
 <div class="lp-nav"><a class="lp-brand" href="#top"><span class="lp-mark">{MARK}</span><span>Inquiry Desk<small>by DataPoch</small></span></a>
-<div class="lp-links"><a href="#how">How it works</a><a href="#features">Features</a><a href="#security">Security</a><a href="#faq">FAQ</a><a class="cta" href="#start">Open the demo</a></div></div>
+<div class="lp-links"><a href="#how">How it works</a><a href="#features">Features</a><a href="#security">Security</a><a href="#faq">FAQ</a><a href="/vendor" target="_self">Vendor portal</a><a class="cta" href="#start">Open the demo</a></div></div>
 
 <div class="lp-hero" id="top"><div>
 <span class="lp-eyebrow"><i></i>RFP vendor questions, handled</span>
 <h1>Every vendor question answered <span class="hl">once, on time,</span> and on the record.</h1>
 <p class="lp-lead">Inquiry Desk reads the procurement mailbox, finds every question in every email, groups repeats by meaning, and helps your team publish one addendum and reply to every vendor. Staff approve every answer.</p>
 <div class="lp-ctas"><a class="lp-btn p" href="#start">Try the live demo</a><a class="lp-btn s" href="#how">See how it works</a></div>
-<div class="lp-note">Demo with sample data based on public RFP No. {e(rfp)} documents. No agency data.</div></div>
+<div class="lp-vendor"><a href="/vendor" target="_self">Are you testing as a vendor? Submit questions without signing in →</a></div><div class="lp-note">Demo with sample data based on public RFP No. {e(rfp)} documents. No agency data.</div></div>
 
 <div class="lp-win" aria-label="Product preview"><div class="lp-bar"><i></i><i></i><i></i></div><div class="lp-win-b">
 <div class="lp-mail"><div class="m">Q-1005 · Pinecrest Consulting · 3 questions found</div>
@@ -193,7 +194,7 @@ def render(stats, roles, users, demo_roles, on_role, on_signin, rfp, on_google=N
 <div class="lp-tr"><b>Your environment</b><span>In production: hosted in the United States or inside your own Microsoft tenant.</span></div></div></div>
 
 <div class="lp-sec" id="start"><div class="lp-kick">Get started</div><div class="lp-h2">Open the demo as any role</div>
-<p class="lp-sub">Each role sees only what that person would see. Try Contracts Staff, then Contracts Manager, to see separation of duties in action.</p></div>
+<p class="lp-sub">Each role sees only what that person would see. Try Contracts Staff, then Contracts Manager, to see separation of duties in action. To test like a vendor, use the <a href="/vendor" target="_self" style="color:#1a7f93;font-weight:600">vendor portal</a>: submit questions, then sign in as Contracts Manager to answer and publish them.</p></div>
 </div>""", unsafe_allow_html=True)
 
     if demo_roles:
